@@ -3,7 +3,9 @@
 
 #include "framework.h"
 #include "WindowsProject1.h"
-#include "DataModel.h"
+#include "Movie.h"
+#include "Cinema.h"
+#include "Screening.h"
 #include <vector>
 #include <string>
 #include <fstream>
@@ -24,6 +26,10 @@
 #define IDC_INPUT_EDIT1 1006
 #define IDC_INPUT_LABEL2 1007
 #define IDC_INPUT_EDIT2 1008
+#define IDC_INPUT_LABEL3 1009
+#define IDC_INPUT_EDIT3 1010
+#define IDC_INPUT_LABEL4 1011
+#define IDC_INPUT_EDIT4 1012
 
 
 // Глобальные переменные:
@@ -38,6 +44,8 @@ HWND hWndSaveButton;
 HWND hWndListView;
 HWND hWndInputLabel1, hWndInputEdit1;
 HWND hWndInputLabel2, hWndInputEdit2;
+HWND hWndInputLabel3, hWndInputEdit3;
+HWND hWndInputLabel4, hWndInputEdit4;
 
 std::vector<Cinema> g_cinemas;
 std::vector<Movie> g_movies;
@@ -56,7 +64,7 @@ void HandleQuerySelection();
 void RunSelectedQuery();
 void SaveResultsToFile();
 void DisplayCinemaRepertoire(const std::wstring& cinemaName);
-void DisplayFreeSeats(const std::wstring& cinemaName, const std::wstring& movieTitle);
+void DisplayFreeSeats(const std::wstring& cinemaName, const std::wstring& movieTitle, const std::wstring& date, const std::wstring& time);
 void DisplaySoldTickets(const std::wstring& movieTitle);
 
 
@@ -206,18 +214,24 @@ void CreateUIComponents(HWND hWnd) {
         SendMessage(hWndInputEdit2, CB_ADDSTRING, 0, (LPARAM)movie.title.c_str());
     }
     
+    hWndInputLabel3 = CreateWindowW(L"STATIC", L"Дата (ГГГГ-ММ-ДД):", WS_CHILD, 10, 120, 150, 20, hWnd, (HMENU)IDC_INPUT_LABEL3, hInst, NULL);
+    hWndInputEdit3 = CreateWindowW(L"EDIT", L"", WS_BORDER | WS_CHILD, 160, 120, 200, 25, hWnd, (HMENU)IDC_INPUT_EDIT3, hInst, NULL);
+
+    hWndInputLabel4 = CreateWindowW(L"STATIC", L"Время (ЧЧ:ММ):", WS_CHILD, 10, 150, 150, 20, hWnd, (HMENU)IDC_INPUT_LABEL4, hInst, NULL);
+    hWndInputEdit4 = CreateWindowW(L"EDIT", L"", WS_BORDER | WS_CHILD, 160, 150, 200, 25, hWnd, (HMENU)IDC_INPUT_EDIT4, hInst, NULL);
+
     // Кнопка "Выполнить"
     hWndRunButton = CreateWindowW(L"BUTTON", L"Выполнить", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-        10, 120, 100, 30, hWnd, (HMENU)IDC_RUN_BUTTON, hInst, NULL);
+        10, 180, 100, 30, hWnd, (HMENU)IDC_RUN_BUTTON, hInst, NULL);
 
     // Кнопка "Сохранить"
     hWndSaveButton = CreateWindowW(L"BUTTON", L"Сохранить в файл", WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,
-        120, 120, 150, 30, hWnd, (HMENU)IDC_SAVE_BUTTON, hInst, NULL);
+        120, 180, 150, 30, hWnd, (HMENU)IDC_SAVE_BUTTON, hInst, NULL);
 
 
     // ListView для вывода результатов
     hWndListView = CreateWindowEx(0, WC_LISTVIEW, L"", WS_VISIBLE | WS_CHILD | WS_BORDER | LVS_REPORT | LVS_EDITLABELS,
-        10, 160, 760, 350, hWnd, (HMENU)IDC_LISTVIEW, hInst, NULL);
+        10, 220, 760, 290, hWnd, (HMENU)IDC_LISTVIEW, hInst, NULL);
     
     ListView_SetExtendedListViewStyle(hWndListView, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
 
@@ -255,8 +269,14 @@ void HandleQuerySelection() {
     ShowWindow(hWndInputEdit1, SW_HIDE);
     ShowWindow(hWndInputLabel2, SW_HIDE);
     ShowWindow(hWndInputEdit2, SW_HIDE);
+    ShowWindow(hWndInputLabel3, SW_HIDE);
+    ShowWindow(hWndInputEdit3, SW_HIDE);
+    ShowWindow(hWndInputLabel4, SW_HIDE);
+    ShowWindow(hWndInputEdit4, SW_HIDE);
 
     // Сброс позиций
+    SetWindowPos(hWndInputLabel1, NULL, 10, 60, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+    SetWindowPos(hWndInputEdit1, NULL, 160, 60, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
     SetWindowPos(hWndInputLabel2, NULL, 10, 90, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
     SetWindowPos(hWndInputEdit2, NULL, 160, 90, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
 
@@ -272,6 +292,10 @@ void HandleQuerySelection() {
         ShowWindow(hWndInputEdit1, SW_SHOW);
         ShowWindow(hWndInputLabel2, SW_SHOW);
         ShowWindow(hWndInputEdit2, SW_SHOW);
+        ShowWindow(hWndInputLabel3, SW_SHOW);
+        ShowWindow(hWndInputEdit3, SW_SHOW);
+        ShowWindow(hWndInputLabel4, SW_SHOW);
+        ShowWindow(hWndInputEdit4, SW_SHOW);
         break;
     case 2: // Проданные билеты
         // Перемещаем второе поле на место первого
@@ -288,10 +312,18 @@ void RunSelectedQuery() {
 
     wchar_t buffer1[256];
     wchar_t buffer2[256];
+    wchar_t buffer3[256];
+    wchar_t buffer4[256];
+
     GetWindowTextW(hWndInputEdit1, buffer1, 256);
     GetWindowTextW(hWndInputEdit2, buffer2, 256);
+    GetWindowTextW(hWndInputEdit3, buffer3, 256);
+    GetWindowTextW(hWndInputEdit4, buffer4, 256);
+
     std::wstring input1 = buffer1;
     std::wstring input2 = buffer2;
+    std::wstring input3 = buffer3;
+    std::wstring input4 = buffer4;
 
     switch (selection)
     {
@@ -299,7 +331,7 @@ void RunSelectedQuery() {
         DisplayCinemaRepertoire(input1);
         break;
     case 1: // Свободные места
-        DisplayFreeSeats(input1, input2);
+        DisplayFreeSeats(input1, input2, input3, input4);
         break;
     case 2: // Проданные билеты
         DisplaySoldTickets(input2); // Используем input2 для фильмов
@@ -414,7 +446,7 @@ void DisplayCinemaRepertoire(const std::wstring& cinemaName) {
     }
 }
 
-void DisplayFreeSeats(const std::wstring& cinemaName, const std::wstring& movieTitle) {
+void DisplayFreeSeats(const std::wstring& cinemaName, const std::wstring& movieTitle, const std::wstring& date, const std::wstring& time) {
     ListView_DeleteAllItems(hWndListView);
     while (ListView_DeleteColumn(hWndListView, 0));
 
@@ -440,7 +472,7 @@ void DisplayFreeSeats(const std::wstring& cinemaName, const std::wstring& movieT
 
     int itemIndex = 0;
     for (const auto& screening : g_screenings) {
-        if (screening.cinema_id == cinemaId && screening.movie_id == movieId) {
+        if (screening.cinema_id == cinemaId && screening.movie_id == movieId && screening.date == date && screening.time == time) {
             LVITEMW lvi;
             lvi.mask = LVIF_TEXT;
             lvi.iItem = itemIndex;
@@ -456,6 +488,9 @@ void DisplayFreeSeats(const std::wstring& cinemaName, const std::wstring& movieT
 
             itemIndex++;
         }
+    }
+    if (itemIndex == 0) {
+        MessageBoxW(GetParent(hWndListView), L"Сеанс с указанными параметрами не найден.", L"Информация", MB_OK | MB_ICONINFORMATION);
     }
 }
 
